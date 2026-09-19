@@ -1,0 +1,9 @@
+Package: com.example.returntolivecontainer
+Name: Return to LiveContainer
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: A draggable Liquid Glass-style floating button that returns from a LiveContainer guest app to LiveContainer.
+Maintainer: Local build
+Author: Local build
+Section: Tweaks
+Depends: mobilesubstrate
