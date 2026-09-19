@@ -339,6 +339,24 @@ static CGFloat const RTLCDragThreshold = 8.0;
     NSString *urlString = [NSString stringWithFormat:@"%@://", scheme];
     NSURL *url = [NSURL URLWithString:urlString];
 
+    // A LiveProcess guest can share UIApplication with a retained host scene.
+    // Prefer returning to that scene; this is the public equivalent of the
+    // host-side activation path and does not terminate the guest process.
+    UISceneSession *currentSession = self.overlayWindow.windowScene.session;
+    for (UISceneSession *session in UIApplication.sharedApplication.openSessions) {
+        if ([session.persistentIdentifier isEqualToString:currentSession.persistentIdentifier]) {
+            continue;
+        }
+
+        [UIApplication.sharedApplication requestSceneSessionActivation:session
+                                                            userActivity:nil
+                                                                  options:nil
+                                                             errorHandler:^(NSError *error) {
+            NSLog(@"[ReturnToLiveContainer] Host scene activation failed: %@", error);
+        }];
+        break;
+    }
+
     if (url) {
         // LiveContainer itself uses LSApplicationWorkspace to cross the process
         // boundary. The guest UIApplication is often unable to route its host's
