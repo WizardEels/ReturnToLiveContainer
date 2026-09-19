@@ -1,5 +1,13 @@
 # Return to LiveContainer
 
+<div id="toc">
+  <ul style="list-style: none">
+    <summary>
+      <h1> NOTE: THIS REPOSITORY IS VIDE-CODED! </h1>
+    </summary>
+  </ul>
+</div>
+
 A LiveContainer TweakLoader tweak that adds a draggable floating button to guest apps.
 
 ## Behaviour
