@@ -21,18 +21,16 @@
 static CGFloat const RTLCDiameter = 58.0;
 static CGFloat const RTLCMargin = 10.0;
 static NSTimeInterval const RTLCFadeDelay = 3.0;
-static CGFloat const RTLCIdleAlpha = 0.10;
+static CGFloat const RTLCIdleAlpha = 0.20;
 static CGFloat const RTLCActiveAlpha = 1.0;
 static CGFloat const RTLCDragThreshold = 8.0;
 
-#pragma mark - Overlay window
-
-@class RTLCOverlayWindow;
+#pragma mark - Button
 
 #pragma mark - Button
 
 @interface RTLCButton : UIButton
-@property(nonatomic, weak) RTLCOverlayWindow *overlayWindow;
+@property(nonatomic, weak) UIWindow *overlayWindow;
 @property(nonatomic, assign) CGPoint touchStartPoint;
 @property(nonatomic, assign) CGPoint buttonStartCenter;
 @property(nonatomic, assign) BOOL dragging;
@@ -40,24 +38,6 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, assign) BOOL ignoreNextTap;
 @property(nonatomic, strong) NSTimer *fadeTimer;
 - (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
-@end
-
-@interface RTLCOverlayWindow : UIWindow
-@property(nonatomic, weak) RTLCButton *returnButton;
-@end
-
-@implementation RTLCOverlayWindow
-
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    RTLCButton *button = self.returnButton;
-    if (!button || button.hidden || button.alpha < 0.01) {
-        return NO;
-    }
-
-    CGPoint localPoint = [button convertPoint:point fromView:self];
-    return [button pointInside:localPoint withEvent:event];
-}
-
 @end
 
 @implementation RTLCButton
@@ -71,11 +51,15 @@ static CGFloat const RTLCDragThreshold = 8.0;
     self.accessibilityHint = @"Returns to the main LiveContainer app.";
 
     Class glassEffectClass = NSClassFromString(@"UIGlassEffect");
-    if (glassEffectClass) {
-        id glassEffect = ((id (*)(id, SEL))objc_msgSend)(glassEffectClass, @selector(effect));
+    SEL glassFactory = NSSelectorFromString(@"effectWithStyle:");
+    if (@available(iOS 26.0, *) && glassEffectClass && [glassEffectClass respondsToSelector:glassFactory]) {
+        // UIGlassEffect is absent from the iOS 15 build SDK. Resolve it at runtime
+        // and verify its factory selector because early iOS 26 builds exposed an
+        // incomplete class that otherwise crashes here.
+        id glassEffect = ((id (*)(id, SEL, NSInteger))objc_msgSend)(glassEffectClass, glassFactory, 0);
         ((void (*)(id, SEL, id))objc_msgSend)(glassEffect,
                                                @selector(setTintColor:),
-                                               [UIColor colorWithWhite:1.0 alpha:0.06]);
+                                               [UIColor colorWithWhite:1.0 alpha:0.14]);
         ((void (*)(id, SEL, BOOL))objc_msgSend)(glassEffect, @selector(setInteractive:), YES);
 
         UIVisualEffectView *glassView = [[UIVisualEffectView alloc] initWithEffect:(UIVisualEffect *)glassEffect];
@@ -87,7 +71,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
         [self insertSubview:glassView atIndex:0];
     } else {
         UIVisualEffectView *blur = [[UIVisualEffectView alloc] initWithEffect:
-                                    [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemChromeMaterialDark]];
+                                    [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemChromeMaterial]];
         blur.frame = self.bounds;
         blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         blur.userInteractionEnabled = NO;
@@ -97,8 +81,12 @@ static CGFloat const RTLCDragThreshold = 8.0;
     }
 
     self.layer.cornerRadius = RTLCDiameter / 2.0;
-    self.layer.borderWidth = 0.75;
-    self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.20].CGColor;
+    self.layer.borderWidth = 1.0;
+    self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.55].CGColor;
+    self.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.layer.shadowOpacity = 0.28;
+    self.layer.shadowRadius = 8.0;
+    self.layer.shadowOffset = CGSizeMake(0, 3.0);
     self.clipsToBounds = YES;
 
     UIImageSymbolConfiguration *symbolConfig =
@@ -112,6 +100,10 @@ static CGFloat const RTLCDragThreshold = 8.0;
     [self setImage:image forState:UIControlStateNormal];
     self.tintColor = UIColor.whiteColor;
     self.imageView.contentMode = UIViewContentModeScaleAspectFit;
+    self.imageView.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.imageView.layer.shadowOpacity = 0.35;
+    self.imageView.layer.shadowRadius = 2.0;
+    self.imageView.layer.shadowOffset = CGSizeMake(0, 1.0);
 
     [self addTarget:self action:@selector(buttonTouchDown:) forControlEvents:UIControlEventTouchDown];
     [self addTarget:self action:@selector(buttonTouchUpInside:) forControlEvents:UIControlEventTouchUpInside];
@@ -140,6 +132,9 @@ static CGFloat const RTLCDragThreshold = 8.0;
     self.movedDuringTouch = NO;
 
     [self setAlpha:RTLCActiveAlpha animated:YES];
+    [UIView animateWithDuration:0.14 animations:^{
+        self.transform = CGAffineTransformMakeScale(0.92, 0.92);
+    }];
     [self resetFadeTimer];
 }
 
@@ -156,6 +151,9 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 - (void)buttonTouchUpInside:(UIButton *)sender {
+    [UIView animateWithDuration:0.18 animations:^{
+        self.transform = CGAffineTransformIdentity;
+    }];
     if (self.movedDuringTouch || self.ignoreNextTap) {
         self.ignoreNextTap = NO;
         [self resetFadeTimer];
@@ -166,6 +164,9 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 - (void)buttonTouchCancelled:(UIButton *)sender {
+    [UIView animateWithDuration:0.18 animations:^{
+        self.transform = CGAffineTransformIdentity;
+    }];
     if (self.dragging || self.movedDuringTouch) {
         [self snapToNearestEdgeAnimated:YES];
     }
@@ -216,6 +217,9 @@ static CGFloat const RTLCDragThreshold = 8.0;
     }
 
     [super touchesEnded:touches withEvent:event];
+    [UIView animateWithDuration:0.18 animations:^{
+        self.transform = CGAffineTransformIdentity;
+    }];
     [self resetFadeTimer];
 }
 
@@ -303,52 +307,17 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
     UIApplication *application = UIApplication.sharedApplication;
 
-    if (url && [application canOpenURL:url]) {
+    if (url) {
         [application openURL:url options:@{} completionHandler:^(BOOL success) {
-            // LiveContainer has to receive the URL before this guest process exits.
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.20 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                exit(0);
-            });
+            // canOpenURL: is restricted by LSApplicationQueriesSchemes in a guest
+            // app, so only the actual open result is trustworthy. Do not terminate
+            // the guest on failure: that was the source of the apparent crash.
+            if (!success) {
+                [self resetFadeTimer];
+            }
         }];
     } else {
-        // If URL launching is unavailable, still terminate the guest so LiveContainer
-        // can regain control through its normal guest termination flow.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            exit(0);
-        });
-    }
-}
-
-@end
-
-#pragma mark - Overlay controller
-
-@interface RTLCOverlayViewController : UIViewController
-@property(nonatomic, strong) RTLCButton *button;
-@end
-
-@implementation RTLCOverlayViewController
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-
-    self.view.backgroundColor = UIColor.clearColor;
-    self.view.userInteractionEnabled = YES;
-
-    self.button = [[RTLCButton alloc] initWithFrame:CGRectMake(0, 0, RTLCDiameter, RTLCDiameter)];
-    [self.view addSubview:self.button];
-}
-
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-
-    if (!self.button) return;
-
-    if (self.button.center.x == 0 && self.button.center.y == 0) {
-        self.button.center = CGPointMake(CGRectGetWidth(self.view.bounds) - 45.0,
-                                         CGRectGetMidY(self.view.bounds));
+        [self resetFadeTimer];
     }
 }
 
@@ -356,7 +325,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 #pragma mark - Startup
 
-static RTLCOverlayWindow *rtlOverlayWindow = nil;
+static RTLCButton *rtlReturnButton = nil;
 
 static UIWindowScene *rtlcActiveWindowScene(void) {
     if (@available(iOS 13.0, *)) {
@@ -377,9 +346,26 @@ static UIWindowScene *rtlcActiveWindowScene(void) {
     return nil;
 }
 
+static UIWindow *rtlcHostWindow(void) {
+    UIWindowScene *scene = rtlcActiveWindowScene();
+    for (UIWindow *window in scene.windows) {
+        if (window.isKeyWindow) {
+            return window;
+        }
+    }
+
+    for (UIWindow *window in scene.windows) {
+        if (!window.hidden && window.alpha > 0.0) {
+            return window;
+        }
+    }
+
+    return nil;
+}
+
 static void rtlcInstallOverlay(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (rtlOverlayWindow) return;
+        if (rtlReturnButton) return;
 
         // Do not inject into LiveContainer's own UI if the tweak is ever loaded there.
         if ([NSUserDefaults respondsToSelector:@selector(isLiveProcess)] &&
@@ -387,37 +373,26 @@ static void rtlcInstallOverlay(void) {
             return;
         }
 
-        RTLCOverlayViewController *controller = [RTLCOverlayViewController new];
-
-        if (@available(iOS 13.0, *)) {
-            UIWindowScene *scene = rtlcActiveWindowScene();
-            if (!scene) {
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), ^{
-                    rtlcInstallOverlay();
-                });
-                return;
-            }
-
-            rtlOverlayWindow = [[RTLCOverlayWindow alloc] initWithWindowScene:scene];
-        } else {
-            rtlOverlayWindow = [[RTLCOverlayWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+        UIWindow *hostWindow = rtlcHostWindow();
+        if (!hostWindow) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                rtlcInstallOverlay();
+            });
+            return;
         }
 
-        rtlOverlayWindow.rootViewController = controller;
-        rtlOverlayWindow.backgroundColor = UIColor.clearColor;
-        rtlOverlayWindow.windowLevel = UIWindowLevelAlert + 1.0;
-        rtlOverlayWindow.opaque = NO;
-        rtlOverlayWindow.hidden = NO;
-        rtlOverlayWindow.userInteractionEnabled = YES;
-
-        controller.button.overlayWindow = rtlOverlayWindow;
-        rtlOverlayWindow.returnButton = controller.button;
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [controller.button snapToNearestEdgeAnimated:NO];
-            [controller.button resetFadeTimer];
-        });
+        // A sibling view receives touches only within its circular bounds. Unlike
+        // a second alert-level UIWindow, it never makes the guest app resign focus.
+        rtlReturnButton = [[RTLCButton alloc] initWithFrame:CGRectMake(0, 0, RTLCDiameter, RTLCDiameter)];
+        rtlReturnButton.overlayWindow = hostWindow;
+        rtlReturnButton.center = CGPointMake(CGRectGetWidth(hostWindow.bounds) - RTLCDiameter / 2.0 - RTLCMargin,
+                                           CGRectGetMidY(hostWindow.bounds));
+        rtlReturnButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin |
+                                            UIViewAutoresizingFlexibleTopMargin |
+                                            UIViewAutoresizingFlexibleBottomMargin;
+        [hostWindow addSubview:rtlReturnButton];
+        [rtlReturnButton snapToNearestEdgeAnimated:NO];
     });
 }
 

@@ -16,7 +16,7 @@ A LiveContainer TweakLoader tweak that adds a draggable floating button to guest
 - Uses `UIGlassEffect` on iOS 26+.
 - Falls back to a system blur on older iOS versions.
 - Starts fully visible.
-- Fades to 10% opacity after 3 seconds of inactivity.
+- Fades to 20% opacity after 3 seconds of inactivity.
 - Touching or dragging it restores full opacity.
 - Drag it anywhere and release it to snap to the nearest left/right edge.
 - Vertical position is preserved while snapping.
@@ -59,7 +59,7 @@ At the top of `Tweak.xm`:
 static CGFloat const RTLCDiameter = 58.0;
 static CGFloat const RTLCMargin = 10.0;
 static NSTimeInterval const RTLCFadeDelay = 3.0;
-static CGFloat const RTLCIdleAlpha = 0.10;
+static CGFloat const RTLCIdleAlpha = 0.20;
 ```
 
 ### Current design
