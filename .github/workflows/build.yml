@@ -3,17 +3,19 @@ name: Build tweak
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: macos-14
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Theos
-        uses: theos/setup-theos@main
+        uses: beerpiss/theos-action@v1
 
       - name: Build package
         run: make package FINALPACKAGE=1
