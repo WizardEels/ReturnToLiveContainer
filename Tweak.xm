@@ -27,7 +27,20 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 #pragma mark - Overlay window
 
-@class RTLCButton;
+@class RTLCOverlayWindow;
+
+#pragma mark - Button
+
+@interface RTLCButton : UIButton
+@property(nonatomic, weak) RTLCOverlayWindow *overlayWindow;
+@property(nonatomic, assign) CGPoint touchStartPoint;
+@property(nonatomic, assign) CGPoint buttonStartCenter;
+@property(nonatomic, assign) BOOL dragging;
+@property(nonatomic, assign) BOOL movedDuringTouch;
+@property(nonatomic, assign) BOOL ignoreNextTap;
+@property(nonatomic, strong) NSTimer *fadeTimer;
+- (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
+@end
 
 @interface RTLCOverlayWindow : UIWindow
 @property(nonatomic, weak) RTLCButton *returnButton;
@@ -47,18 +60,6 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 @end
 
-#pragma mark - Button
-
-@interface RTLCButton : UIButton
-@property(nonatomic, weak) RTLCOverlayWindow *overlayWindow;
-@property(nonatomic, assign) CGPoint touchStartPoint;
-@property(nonatomic, assign) CGPoint buttonStartCenter;
-@property(nonatomic, assign) BOOL dragging;
-@property(nonatomic, assign) BOOL movedDuringTouch;
-@property(nonatomic, assign) BOOL ignoreNextTap;
-@property(nonatomic, strong) NSTimer *fadeTimer;
-@end
-
 @implementation RTLCButton
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -66,16 +67,18 @@ static CGFloat const RTLCDragThreshold = 8.0;
     if (!self) return nil;
 
     self.backgroundColor = UIColor.clearColor;
-    self.adjustsImageWhenHighlighted = NO;
     self.accessibilityLabel = @"Return to LiveContainer";
     self.accessibilityHint = @"Returns to the main LiveContainer app.";
 
-    if (@available(iOS 26.0, *)) {
-        UIGlassEffect *glassEffect = [UIGlassEffect effect];
-        glassEffect.tintColor = [UIColor colorWithWhite:1.0 alpha:0.06];
-        glassEffect.interactive = YES;
+    Class glassEffectClass = NSClassFromString(@"UIGlassEffect");
+    if (glassEffectClass) {
+        id glassEffect = ((id (*)(id, SEL))objc_msgSend)(glassEffectClass, @selector(effect));
+        ((void (*)(id, SEL, id))objc_msgSend)(glassEffect,
+                                               @selector(setTintColor:),
+                                               [UIColor colorWithWhite:1.0 alpha:0.06]);
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(glassEffect, @selector(setInteractive:), YES);
 
-        UIVisualEffectView *glassView = [[UIVisualEffectView alloc] initWithEffect:glassEffect];
+        UIVisualEffectView *glassView = [[UIVisualEffectView alloc] initWithEffect:(UIVisualEffect *)glassEffect];
         glassView.frame = self.bounds;
         glassView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         glassView.userInteractionEnabled = NO;
@@ -138,6 +141,18 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
     [self setAlpha:RTLCActiveAlpha animated:YES];
     [self resetFadeTimer];
+}
+
+- (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated {
+    void (^changeAlpha)(void) = ^{
+        self.alpha = alpha;
+    };
+
+    if (animated) {
+        [UIView animateWithDuration:0.18 animations:changeAlpha];
+    } else {
+        changeAlpha();
+    }
 }
 
 - (void)buttonTouchUpInside:(UIButton *)sender {
