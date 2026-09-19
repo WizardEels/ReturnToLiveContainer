@@ -1,5 +1,7 @@
 # Return to LiveContainer
 
+## THIS REPOSITORY IS VIBE-CODED!
+
 A LiveContainer TweakLoader tweak that adds a draggable floating button to guest apps.
 
 ## Behaviour
