@@ -1,59 +1,61 @@
 # Return to LiveContainer
 
-<div id="toc">
-  <ul style="list-style: none">
-    <summary>
-      <h1> NOTE: THIS REPOSITORY IS VIDE-CODED! </h1>
-    </summary>
-  </ul>
-</div>
+A [LiveContainer](https://github.com/LiveContainer/LiveContainer) TweakLoader tweak that places a draggable Return button over guest apps.
 
-A LiveContainer TweakLoader tweak that adds a draggable floating button to guest apps.
+The button uses LiveContainer's own return bridge when it is available, which requests LiveContainer to relaunch before the current guest is closed.
 
-## Behaviour
+## Features
 
-- Circular Liquid Glass-style button.
-- Uses `UIGlassEffect` on iOS 26+.
-- Falls back to a system blur on older iOS versions.
-- Starts fully visible.
-- Fades to 20% opacity after 3 seconds of inactivity.
-- Touching or dragging it restores full opacity.
-- Drag it anywhere and release it to snap to the nearest left/right edge.
-- Vertical position is preserved while snapping.
-- Uses LiveContainer's `lcAppUrlScheme` helper when available.
-- Falls back to `livecontainer://` for older builds.
-- Does not install the overlay into LiveContainer's own process.
+- Draggable circular Return control that snaps to the nearest screen edge.
+- Liquid Glass effect on iOS 26 when the system API is available, with a system-material fallback on earlier versions.
+- High-contrast white return icon, border, and shadow for readability over bright content.
+- Fades to 20% opacity after three seconds of inactivity; touching it restores full opacity.
+- Uses LiveContainer's built-in return/relaunch bridge, with URL-based fallbacks for older builds.
 
-## Build on macOS with Theos
+## Downloading a build
 
-```sh
-export THEOS=/path/to/theos
-make package
-```
+GitHub Actions builds both formats automatically when a change is pushed to `main`. You can also run a build manually:
 
-The resulting package is in `packages/`.
-
-## Build without a Mac
-
-This repository includes `.github/workflows/build.yml`.
-
-1. Create a GitHub repository.
-2. Upload this project.
-3. Open **Actions**.
-4. Run **Build tweak**.
-5. Download the `ReturnToLiveContainer` artifact.
-6. Extract the `.deb`.
-7. The tweak dylib is inside the package under the normal Theos library path.
+1. Open the repository's **Actions** tab.
+2. Select **Build tweak**.
+3. Choose **Run workflow**.
+4. When the workflow finishes, open that run and download one of its artifacts:
+   - `ReturnToLiveContainer-dylib` — recommended for LiveContainer. It contains `ReturnToLiveContainer.dylib`.
+   - `ReturnToLiveContainer` — the Debian (`.deb`) package for conventional Theos/jailbreak package installation.
 
 ## Installing in LiveContainer
 
-LiveContainer's TweakLoader loads `.dylib` tweaks placed in its Tweaks folder, and LiveContainer's built-in tweak manager can sign imported tweaks.
+1. Download and extract the `ReturnToLiveContainer-dylib` artifact.
+2. Open the primary (blue) LiveContainer app and go to **Tweaks**.
+3. Import `ReturnToLiveContainer.dylib` into either the global Tweaks folder or an app-specific tweak folder.
+4. Assign the folder to a guest app when using an app-specific folder.
+5. Use LiveContainer's **Sign** action if the tweak manager does not automatically sign the imported dylib, then launch the guest app.
 
-Import the built dylib/package using LiveContainer's Tweak manager.
+LiveContainer loads global tweaks into every guest app and supports app-specific tweak folders. Do not enable both **Don't Inject TweakLoader** and **Don't Load TweakLoader** for the guest app, since that disables tweak loading.
+
+## Building locally on macOS
+
+### Prerequisites
+
+- Xcode Command Line Tools
+- [Theos](https://theos.dev/docs/installation-macos) with an iPhoneOS SDK installed
+- A shell environment with `THEOS` pointing at the Theos directory
+
+```sh
+git clone https://github.com/OWNER/ReturnToLiveContainer.git
+cd ReturnToLiveContainer
+export THEOS="$HOME/theos" # Replace with your actual Theos directory.
+make package FINALPACKAGE=1
+```
+
+The finished outputs are:
+
+- `packages/*.deb` — installable Debian package.
+- `.theos/_/Library/MobileSubstrate/DynamicLibraries/ReturnToLiveContainer.dylib` — dylib for LiveContainer import.
 
 ## Customisation
 
-At the top of `Tweak.xm`:
+Edit these values near the top of [`Tweak.xm`](Tweak.xm):
 
 ```objc
 static CGFloat const RTLCDiameter = 58.0;
@@ -62,14 +64,14 @@ static NSTimeInterval const RTLCFadeDelay = 3.0;
 static CGFloat const RTLCIdleAlpha = 0.20;
 ```
 
-### Current design
+Rebuild and re-import/re-sign the dylib after making a change.
 
-The supplied reference image is used as the visual direction: a dark translucent circular control with a white curved return arrow.
+## Compatibility notes
 
-The implementation uses the iOS system glass effect rather than embedding the supplied image into the tweak.
+This project targets arm64 guest apps on iOS 15 and later. The iOS 26 glass API is looked up at runtime, so building with an older Theos SDK remains supported.
 
-## Return behaviour
+The Return action relies on LiveContainer's `LCSharedUtils` bridge. If a fork or older build does not expose that bridge, the tweak tries URL and scene-activation fallbacks, but its return behavior may be limited by that LiveContainer build.
 
-When pressed, the tweak opens LiveContainer using its exposed URL scheme and then exits the guest process after a short delay. Current LiveContainer releases document `livecontainer://` URL handling and expose the URL-scheme helper used by this tweak.
+## License
 
-If a particular LiveContainer build does not accept the root URL, the fallback is to terminate the guest so LiveContainer can regain control through its normal termination flow.
+This project is distributed under the [MIT License](LICENSE).
