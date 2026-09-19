@@ -39,6 +39,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, assign) BOOL movedDuringTouch;
 @property(nonatomic, assign) BOOL ignoreNextTap;
 @property(nonatomic, strong) NSTimer *fadeTimer;
+@property(nonatomic, strong) UIImageView *iconView;
 - (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
 @end
 
@@ -123,13 +124,19 @@ static CGFloat const RTLCDragThreshold = 8.0;
         image = [UIImage systemImageNamed:@"arrow.counterclockwise" withConfiguration:symbolConfig];
     }
 
-    [self setImage:image forState:UIControlStateNormal];
-    self.tintColor = UIColor.whiteColor;
-    self.imageView.contentMode = UIViewContentModeScaleAspectFit;
-    self.imageView.layer.shadowColor = UIColor.blackColor.CGColor;
-    self.imageView.layer.shadowOpacity = 0.35;
-    self.imageView.layer.shadowRadius = 2.0;
-    self.imageView.layer.shadowOffset = CGSizeMake(0, 1.0);
+    // Keep the symbol outside UIVisualEffectView. UIKit otherwise composites the
+    // button image into the glass material on some guest apps, making it blurry.
+    self.iconView = [[UIImageView alloc] initWithImage:[image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]];
+    self.iconView.frame = CGRectInset(self.bounds, 15.0, 15.0);
+    self.iconView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.iconView.contentMode = UIViewContentModeScaleAspectFit;
+    self.iconView.tintColor = UIColor.whiteColor;
+    self.iconView.userInteractionEnabled = NO;
+    self.iconView.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.iconView.layer.shadowOpacity = 0.35;
+    self.iconView.layer.shadowRadius = 2.0;
+    self.iconView.layer.shadowOffset = CGSizeMake(0, 1.0);
+    [self addSubview:self.iconView];
 
     [self addTarget:self action:@selector(buttonTouchDown:) forControlEvents:UIControlEventTouchDown];
     [self addTarget:self action:@selector(buttonTouchUpInside:) forControlEvents:UIControlEventTouchUpInside];
@@ -149,6 +156,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
             view.layer.cornerRadius = self.bounds.size.width / 2.0;
         }
     }
+    self.iconView.frame = CGRectInset(self.bounds, 15.0, 15.0);
 }
 
 - (void)buttonTouchDown:(UIButton *)sender {
@@ -331,16 +339,25 @@ static CGFloat const RTLCDragThreshold = 8.0;
     NSString *urlString = [NSString stringWithFormat:@"%@://", scheme];
     NSURL *url = [NSURL URLWithString:urlString];
 
-    UIApplication *application = UIApplication.sharedApplication;
-
     if (url) {
-        [application openURL:url options:@{} completionHandler:^(BOOL success) {
-            // canOpenURL: is restricted by LSApplicationQueriesSchemes in a guest
-            // app, so only the actual open result is trustworthy. Do not terminate
-            // the guest on failure: that was the source of the apparent crash.
-            if (!success) {
-                [self resetFadeTimer];
+        // LiveContainer itself uses LSApplicationWorkspace to cross the process
+        // boundary. The guest UIApplication is often unable to route its host's
+        // scheme, even though the host application is installed and active.
+        Class workspaceClass = NSClassFromString(@"LSApplicationWorkspace");
+        SEL defaultWorkspace = NSSelectorFromString(@"defaultWorkspace");
+        SEL openURL = NSSelectorFromString(@"openURL:");
+        if (workspaceClass && [workspaceClass respondsToSelector:defaultWorkspace]) {
+            id workspace = ((id (*)(id, SEL))objc_msgSend)(workspaceClass, defaultWorkspace);
+            if (workspace && [workspace respondsToSelector:openURL]) {
+                BOOL opened = ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, openURL, url);
+                if (opened) {
+                    return;
+                }
             }
+        }
+
+        [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL success) {
+            if (!success) [self resetFadeTimer];
         }];
     } else {
         [self resetFadeTimer];
