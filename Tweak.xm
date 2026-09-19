@@ -25,12 +25,14 @@ static CGFloat const RTLCIdleAlpha = 0.20;
 static CGFloat const RTLCActiveAlpha = 1.0;
 static CGFloat const RTLCDragThreshold = 8.0;
 
-#pragma mark - Button
+#pragma mark - Overlay window
+
+@class RTLCOverlayWindow;
 
 #pragma mark - Button
 
 @interface RTLCButton : UIButton
-@property(nonatomic, weak) UIWindow *overlayWindow;
+@property(nonatomic, weak) RTLCOverlayWindow *overlayWindow;
 @property(nonatomic, assign) CGPoint touchStartPoint;
 @property(nonatomic, assign) CGPoint buttonStartCenter;
 @property(nonatomic, assign) BOOL dragging;
@@ -38,6 +40,30 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, assign) BOOL ignoreNextTap;
 @property(nonatomic, strong) NSTimer *fadeTimer;
 - (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
+@end
+
+@interface RTLCOverlayWindow : UIWindow
+@property(nonatomic, weak) RTLCButton *returnButton;
+@end
+
+@implementation RTLCOverlayWindow
+
+// Keeping the guest window key prevents video players and other apps from
+// treating an overlay drag as a loss of application focus.
+- (BOOL)canBecomeKeyWindow {
+    return NO;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    RTLCButton *button = self.returnButton;
+    if (!button || button.hidden || button.alpha < 0.01) {
+        return NO;
+    }
+
+    CGPoint localPoint = [button convertPoint:point fromView:self];
+    return [button pointInside:localPoint withEvent:event];
+}
+
 @end
 
 @implementation RTLCButton
@@ -323,9 +349,28 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 @end
 
+#pragma mark - Overlay controller
+
+@interface RTLCOverlayViewController : UIViewController
+@property(nonatomic, strong) RTLCButton *button;
+@end
+
+@implementation RTLCOverlayViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+
+    self.view.backgroundColor = UIColor.clearColor;
+    self.view.userInteractionEnabled = YES;
+    self.button = [[RTLCButton alloc] initWithFrame:CGRectMake(0, 0, RTLCDiameter, RTLCDiameter)];
+    [self.view addSubview:self.button];
+}
+
+@end
+
 #pragma mark - Startup
 
-static RTLCButton *rtlReturnButton = nil;
+static RTLCOverlayWindow *rtlOverlayWindow = nil;
 
 static UIWindowScene *rtlcActiveWindowScene(void) {
     if (@available(iOS 13.0, *)) {
@@ -346,26 +391,9 @@ static UIWindowScene *rtlcActiveWindowScene(void) {
     return nil;
 }
 
-static UIWindow *rtlcHostWindow(void) {
-    UIWindowScene *scene = rtlcActiveWindowScene();
-    for (UIWindow *window in scene.windows) {
-        if (window.isKeyWindow) {
-            return window;
-        }
-    }
-
-    for (UIWindow *window in scene.windows) {
-        if (!window.hidden && window.alpha > 0.0) {
-            return window;
-        }
-    }
-
-    return nil;
-}
-
 static void rtlcInstallOverlay(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (rtlReturnButton) return;
+        if (rtlOverlayWindow) return;
 
         // Do not inject into LiveContainer's own UI if the tweak is ever loaded there.
         if ([NSUserDefaults respondsToSelector:@selector(isLiveProcess)] &&
@@ -373,8 +401,8 @@ static void rtlcInstallOverlay(void) {
             return;
         }
 
-        UIWindow *hostWindow = rtlcHostWindow();
-        if (!hostWindow) {
+        UIWindowScene *scene = rtlcActiveWindowScene();
+        if (!scene) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 rtlcInstallOverlay();
@@ -382,17 +410,21 @@ static void rtlcInstallOverlay(void) {
             return;
         }
 
-        // A sibling view receives touches only within its circular bounds. Unlike
-        // a second alert-level UIWindow, it never makes the guest app resign focus.
-        rtlReturnButton = [[RTLCButton alloc] initWithFrame:CGRectMake(0, 0, RTLCDiameter, RTLCDiameter)];
-        rtlReturnButton.overlayWindow = hostWindow;
-        rtlReturnButton.center = CGPointMake(CGRectGetWidth(hostWindow.bounds) - RTLCDiameter / 2.0 - RTLCMargin,
-                                           CGRectGetMidY(hostWindow.bounds));
-        rtlReturnButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin |
-                                            UIViewAutoresizingFlexibleTopMargin |
-                                            UIViewAutoresizingFlexibleBottomMargin;
-        [hostWindow addSubview:rtlReturnButton];
-        [rtlReturnButton snapToNearestEdgeAnimated:NO];
+        RTLCOverlayViewController *controller = [RTLCOverlayViewController new];
+        rtlOverlayWindow = [[RTLCOverlayWindow alloc] initWithWindowScene:scene];
+        rtlOverlayWindow.rootViewController = controller;
+        [controller view]; // Create the button before the window can receive touches.
+        rtlOverlayWindow.backgroundColor = UIColor.clearColor;
+        rtlOverlayWindow.windowLevel = UIWindowLevelAlert + 1.0;
+        rtlOverlayWindow.opaque = NO;
+        rtlOverlayWindow.userInteractionEnabled = YES;
+
+        controller.button.overlayWindow = rtlOverlayWindow;
+        rtlOverlayWindow.returnButton = controller.button;
+        controller.button.center = CGPointMake(CGRectGetWidth(rtlOverlayWindow.bounds) - RTLCDiameter / 2.0 - RTLCMargin,
+                                               CGRectGetMidY(rtlOverlayWindow.bounds));
+        [controller.button snapToNearestEdgeAnimated:NO];
+        rtlOverlayWindow.hidden = NO;
     });
 }
 
