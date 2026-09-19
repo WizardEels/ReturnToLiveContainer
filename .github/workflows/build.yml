@@ -30,3 +30,10 @@ jobs:
         with:
           name: ReturnToLiveContainer
           path: packages/*.deb
+
+      - name: Upload tweak dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReturnToLiveContainer-dylib
+          path: .theos/_/Library/MobileSubstrate/DynamicLibraries/ReturnToLiveContainer.dylib
+          if-no-files-found: error
