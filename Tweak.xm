@@ -52,7 +52,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
     Class glassEffectClass = NSClassFromString(@"UIGlassEffect");
     SEL glassFactory = NSSelectorFromString(@"effectWithStyle:");
-    if (@available(iOS 26.0, *) && glassEffectClass && [glassEffectClass respondsToSelector:glassFactory]) {
+    if (glassEffectClass && [glassEffectClass respondsToSelector:glassFactory]) {
         // UIGlassEffect is absent from the iOS 15 build SDK. Resolve it at runtime
         // and verify its factory selector because early iOS 26 builds exposed an
         // incomplete class that otherwise crashes here.
