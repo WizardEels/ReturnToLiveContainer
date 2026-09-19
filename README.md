@@ -2,8 +2,6 @@
 
 A [LiveContainer](https://github.com/LiveContainer/LiveContainer) TweakLoader tweak that places a draggable Return button over guest apps.
 
-The button uses LiveContainer's own return bridge when it is available, which requests LiveContainer to relaunch before the current guest is closed.
-
 ## Features
 
 - Draggable circular Return control that snaps to the nearest screen edge.
@@ -14,7 +12,11 @@ The button uses LiveContainer's own return bridge when it is available, which re
 
 ## Downloading a build
 
-GitHub Actions builds both formats automatically when a change is pushed to `main`. You can also run a build manually:
+### Built version (.dylib only)
+You can download the latest version [here](https://github.com/WizardEels/ReturnToLiveContainer/releases/latest)
+
+### Actions
+You can also run a build manually to download either the .dylib or the .deb:
 
 1. Open the repository's **Actions** tab.
 2. Select **Build tweak**.
@@ -25,8 +27,8 @@ GitHub Actions builds both formats automatically when a change is pushed to `mai
 
 ## Installing in LiveContainer
 
-1. Download and extract the `ReturnToLiveContainer-dylib` artifact.
-2. Open the primary (blue) LiveContainer app and go to **Tweaks**.
+1. Download the `ReturnToLiveContainer.dylib` file.
+2. Open the primary LiveContainer app and go to **Tweaks**.
 3. Import `ReturnToLiveContainer.dylib` into either the global Tweaks folder or an app-specific tweak folder.
 4. Assign the folder to a guest app when using an app-specific folder.
 5. Use LiveContainer's **Sign** action if the tweak manager does not automatically sign the imported dylib, then launch the guest app.
