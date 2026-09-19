@@ -2,6 +2,9 @@
 
 A [LiveContainer](https://github.com/LiveContainer/LiveContainer) TweakLoader tweak that places a draggable Return button over guest apps.
 
+## Note:
+This repository was made entirely by Codex (AI).
+
 ## Features
 
 - Draggable circular Return control that snaps to the nearest screen edge.
