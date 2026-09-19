@@ -324,6 +324,19 @@ static CGFloat const RTLCDragThreshold = 8.0;
 - (void)returnToLiveContainer {
     [self.fadeTimer invalidate];
 
+    // This is LiveContainer's own LC+SideStore return/relaunch bridge. It
+    // starts the host with the required launch configuration and terminates
+    // the old guest only from its completion handler. TweakLoader itself uses
+    // this selector when it switches from a guest into built-in SideStore.
+    Class sharedUtils = NSClassFromString(@"LCSharedUtils");
+    SEL launchGuest = NSSelectorFromString(@"launchToGuestAppWithClassicMode:");
+    if (sharedUtils && [sharedUtils respondsToSelector:launchGuest]) {
+        BOOL accepted = ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(sharedUtils, launchGuest, 0);
+        if (accepted) {
+            return;
+        }
+    }
+
     NSString *scheme = nil;
 
     // LiveContainer exposes this helper through its guest process.
