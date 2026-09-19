@@ -7,4 +7,4 @@ fi
 make package
 echo ""
 echo "Built package:"
-ls -1 .theos/packages/*.deb 2>/dev/null || true
+ls -1 packages/*.deb 2>/dev/null || true

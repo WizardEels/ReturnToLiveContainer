@@ -31,7 +31,7 @@ export THEOS=/path/to/theos
 make package
 ```
 
-The resulting package is in `.theos/packages/`.
+The resulting package is in `packages/`.
 
 ## Build without a Mac
 
