@@ -47,7 +47,7 @@ LiveContainer loads global tweaks into every guest app and supports app-specific
 - A shell environment with `THEOS` pointing at the Theos directory
 
 ```sh
-git clone https://github.com/OWNER/ReturnToLiveContainer.git
+git clone https://github.com/WizardEels/ReturnToLiveContainer.git
 cd ReturnToLiveContainer
 export THEOS="$HOME/theos" # Replace with your actual Theos directory.
 make package FINALPACKAGE=1
