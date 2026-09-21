@@ -44,6 +44,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, copy) NSString *positionPath;
 @property(nonatomic, assign) BOOL positionOnRight;
 @property(nonatomic, assign) CGFloat positionYFraction;
+@property(nonatomic, assign) UIEdgeInsets positionSafeAreaInsets;
 - (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
 - (void)restorePosition;
 - (void)snapToNearestEdgeAnimated:(BOOL)animated;
@@ -278,11 +279,11 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 - (CGRect)positionBounds {
-    // The root view rotates with the guest interface. Its coordinates define
-    // left/right and vertical progress, including while the window is rotating.
+    // The placement view mirrors the guest's coordinates even when UIKit
+    // does not rotate our non-key overlay window.
     UIView *container = self.superview;
     CGRect bounds = container.bounds;
-    UIEdgeInsets safe = container.safeAreaInsets;
+    UIEdgeInsets safe = self.positionSafeAreaInsets;
     CGFloat half = self.bounds.size.width / 2.0;
     CGFloat leftX = CGRectGetMinX(bounds) + safe.left + half + RTLCMargin;
     CGFloat rightX = MAX(leftX, CGRectGetMaxX(bounds) - safe.right - half - RTLCMargin);
@@ -443,6 +444,10 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 @interface RTLCOverlayViewController : UIViewController
 @property(nonatomic, strong) RTLCButton *button;
+@property(nonatomic, strong) UIView *placementView;
+@property(nonatomic, strong) NSTimer *geometryTimer;
+@property(nonatomic, assign) BOOL hasGuestGeometry;
+- (void)syncGuestGeometry;
 @end
 
 @implementation RTLCOverlayViewController
@@ -452,14 +457,69 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    // Follow every orientation allowed by the guest app. UIKit rotates the
-    // root view and its arrow together, without an extra icon transform.
     return UIInterfaceOrientationMaskAll;
 }
 
-- (void)viewWillTransitionToSize:(CGSize)size
-      withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
-    // Finish an active drag in the old coordinate system before it changes.
+- (CGPoint)overlayPoint:(CGPoint)point fromGuestView:(UIView *)guestView {
+    UIWindow *guestWindow = guestView.window;
+    UIWindow *overlayWindow = self.view.window;
+    CGPoint windowPoint = [guestView convertPoint:point toView:guestWindow];
+    CGPoint overlayPoint = [guestWindow convertPoint:windowPoint toWindow:overlayWindow];
+    return [self.view convertPoint:overlayPoint fromView:overlayWindow];
+}
+
+- (void)syncGuestGeometry {
+    UIWindow *overlayWindow = self.view.window;
+    UIWindowScene *scene = overlayWindow.windowScene;
+    if (!scene || scene.activationState != UISceneActivationStateForegroundActive) return;
+
+    UIWindow *guestWindow = nil;
+    for (UIWindow *candidate in scene.windows) {
+        if (candidate == overlayWindow || candidate.hidden || candidate.alpha == 0.0 ||
+            !candidate.rootViewController) continue;
+        if (candidate.isKeyWindow) {
+            guestWindow = candidate;
+            break;
+        }
+        if (!guestWindow && candidate.windowLevel == UIWindowLevelNormal) {
+            guestWindow = candidate;
+        }
+    }
+    UIViewController *guestController = guestWindow.rootViewController;
+    UIView *guestView = guestController.viewIfLoaded;
+    // Full-screen presentations (including video players) can detach the
+    // root view or rotate independently. Follow the visible full-screen view;
+    // a smaller sheet must not shrink the button's available screen area.
+    for (UIViewController *presented = guestController.presentedViewController;
+         presented; presented = presented.presentedViewController) {
+        UIView *presentedView = presented.viewIfLoaded;
+        if (presentedView.window != guestWindow || presentedView.hidden) continue;
+        CGRect coverage = [presentedView convertRect:presentedView.bounds toView:guestWindow];
+        if (CGRectContainsRect(coverage, CGRectInset(guestWindow.bounds, 1.0, 1.0))) {
+            guestView = presentedView;
+        }
+    }
+    if (!guestView.window || CGRectIsEmpty(guestView.bounds)) return;
+
+    CGRect bounds = guestView.bounds;
+    UIEdgeInsets safe = guestView.safeAreaInsets;
+    // Convert basis vectors across the two windows. This captures rotation
+    // and also compensates if UIKit DOES rotate the overlay (no double turn).
+    CGPoint origin = [self overlayPoint:bounds.origin fromGuestView:guestView];
+    CGPoint x = [self overlayPoint:CGPointMake(CGRectGetMinX(bounds) + 1.0, CGRectGetMinY(bounds))
+                     fromGuestView:guestView];
+    CGPoint y = [self overlayPoint:CGPointMake(CGRectGetMinX(bounds), CGRectGetMinY(bounds) + 1.0)
+                     fromGuestView:guestView];
+    CGAffineTransform transform = CGAffineTransformMake(x.x - origin.x, x.y - origin.y,
+                                                       y.x - origin.x, y.y - origin.y, 0, 0);
+    CGPoint center = [self overlayPoint:CGPointMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds))
+                          fromGuestView:guestView];
+    if (self.hasGuestGeometry && CGRectEqualToRect(self.placementView.bounds, bounds) &&
+        CGPointEqualToPoint(self.placementView.center, center) &&
+        CGAffineTransformEqualToTransform(self.placementView.transform, transform) &&
+        UIEdgeInsetsEqualToEdgeInsets(self.button.positionSafeAreaInsets, safe)) return;
+
+    // Preserve a drag in the previous coordinate system before replacing it.
     if (self.button.dragging) {
         [self.button snapToNearestEdgeAnimated:NO];
     }
@@ -468,26 +528,33 @@ static CGFloat const RTLCDragThreshold = 8.0;
         self.button.transform = CGAffineTransformIdentity;
     }
 
-    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
-    [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
-        [self.view layoutIfNeeded];
+    BOOL animated = self.hasGuestGeometry;
+    self.hasGuestGeometry = YES;
+    void (^update)(void) = ^{
+        self.placementView.bounds = bounds;
+        self.placementView.center = center;
+        self.placementView.transform = transform;
+        self.button.positionSafeAreaInsets = safe;
         [self.button restorePosition];
-    } completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
-        // Reapply once the final safe-area insets are available. Never resave
-        // during rotation: the same side and fraction apply in both directions.
-        [self.view layoutIfNeeded];
-        [self.button restorePosition];
-    }];
+    };
+    if (animated) {
+        [UIView animateWithDuration:0.25 delay:0
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
+                         animations:update completion:nil];
+    } else {
+        update();
+    }
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    [self.button restorePosition];
+    [self syncGuestGeometry];
 }
 
 - (void)viewSafeAreaInsetsDidChange {
     [super viewSafeAreaInsetsDidChange];
-    [self.button restorePosition];
+    [self syncGuestGeometry];
 }
 
 - (void)viewDidLoad {
@@ -495,8 +562,23 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
     self.view.backgroundColor = UIColor.clearColor;
     self.view.userInteractionEnabled = YES;
+    self.placementView = [[UIView alloc] initWithFrame:self.view.bounds];
+    [self.view addSubview:self.placementView];
     self.button = [[RTLCButton alloc] initWithFrame:CGRectMake(0, 0, RTLCDiameter, RTLCDiameter)];
-    [self.view addSubview:self.button];
+    [self.placementView addSubview:self.button];
+
+    // Non-key overlays may receive neither rotation nor layout callbacks.
+    // Observe actual guest geometry independently, including programmatic
+    // rotations and changes while scrolling; ignore unchanged geometry.
+    __weak RTLCOverlayViewController *weakSelf = self;
+    self.geometryTimer = [NSTimer timerWithTimeInterval:0.1 repeats:YES block:^(NSTimer *timer) {
+        [weakSelf syncGuestGeometry];
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:self.geometryTimer forMode:NSRunLoopCommonModes];
+}
+
+- (void)dealloc {
+    [self.geometryTimer invalidate];
 }
 
 @end
@@ -556,7 +638,7 @@ static void rtlcInstallOverlay(void) {
         rtlOverlayWindow.returnButton = controller.button;
         rtlOverlayWindow.hidden = NO;
         [controller.view layoutIfNeeded];
-        [controller.button restorePosition];
+        [controller syncGuestGeometry];
     });
 }
 
