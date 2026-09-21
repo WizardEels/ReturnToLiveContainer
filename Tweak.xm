@@ -46,6 +46,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, assign) CGFloat positionYFraction;
 - (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
 - (void)restorePosition;
+- (void)snapToNearestEdgeAnimated:(BOOL)animated;
 @end
 
 @interface RTLCOverlayWindow : UIWindow
@@ -179,7 +180,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 - (void)buttonTouchDown:(UIButton *)sender {
-    self.touchStartPoint = [self.overlayWindow convertPoint:self.center fromView:self.superview];
+    self.touchStartPoint = self.center;
     self.buttonStartCenter = self.center;
     self.dragging = NO;
     self.movedDuringTouch = NO;
@@ -229,14 +230,14 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     UITouch *touch = touches.anyObject;
-    CGPoint point = [touch locationInView:self.overlayWindow];
+    CGPoint point = [touch locationInView:self.superview];
 
-    CGPoint original = [touch previousLocationInView:self.overlayWindow];
+    CGPoint original = [touch previousLocationInView:self.superview];
     CGFloat dx = point.x - original.x;
     CGFloat dy = point.y - original.y;
 
     if (!self.dragging) {
-        CGPoint start = [touch locationInView:self.overlayWindow];
+        CGPoint start = [touch locationInView:self.superview];
         CGFloat distance = hypot(start.x - self.touchStartPoint.x, start.y - self.touchStartPoint.y);
 
         if (distance > RTLCDragThreshold) {
@@ -250,11 +251,11 @@ static CGFloat const RTLCDragThreshold = 8.0;
         center.x += dx;
         center.y += dy;
 
-        CGRect bounds = self.overlayWindow.bounds;
+        CGRect bounds = self.superview.bounds;
         CGFloat half = self.bounds.size.width / 2.0;
 
-        center.x = MAX(half, MIN(CGRectGetWidth(bounds) - half, center.x));
-        center.y = MAX(half, MIN(CGRectGetHeight(bounds) - half, center.y));
+        center.x = MAX(CGRectGetMinX(bounds) + half, MIN(CGRectGetMaxX(bounds) - half, center.x));
+        center.y = MAX(CGRectGetMinY(bounds) + half, MIN(CGRectGetMaxY(bounds) - half, center.y));
 
         self.center = center;
         [self resetFadeTimer];
@@ -277,14 +278,16 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 - (CGRect)positionBounds {
-    UIWindow *window = self.overlayWindow;
-    CGRect bounds = window.bounds;
-    UIEdgeInsets safe = window.safeAreaInsets;
+    // The root view rotates with the guest interface. Its coordinates define
+    // left/right and vertical progress, including while the window is rotating.
+    UIView *container = self.superview;
+    CGRect bounds = container.bounds;
+    UIEdgeInsets safe = container.safeAreaInsets;
     CGFloat half = self.bounds.size.width / 2.0;
-    CGFloat leftX = safe.left + half + RTLCMargin;
-    CGFloat rightX = MAX(leftX, CGRectGetWidth(bounds) - safe.right - half - RTLCMargin);
-    CGFloat topY = safe.top + half + RTLCMargin;
-    CGFloat bottomY = MAX(topY, CGRectGetHeight(bounds) - safe.bottom - half - RTLCMargin);
+    CGFloat leftX = CGRectGetMinX(bounds) + safe.left + half + RTLCMargin;
+    CGFloat rightX = MAX(leftX, CGRectGetMaxX(bounds) - safe.right - half - RTLCMargin);
+    CGFloat topY = CGRectGetMinY(bounds) + safe.top + half + RTLCMargin;
+    CGFloat bottomY = MAX(topY, CGRectGetMaxY(bounds) - safe.bottom - half - RTLCMargin);
     return CGRectMake(leftX, topY, rightX - leftX, bottomY - topY);
 }
 
@@ -300,7 +303,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
     if (!window) return;
 
     CGRect bounds = [self positionBounds];
-    self.positionOnRight = self.center.x >= CGRectGetMidX(window.bounds);
+    self.positionOnRight = self.center.x >= CGRectGetMidX(self.superview.bounds);
     CGPoint target = CGPointMake(self.positionOnRight ? CGRectGetMaxX(bounds) : CGRectGetMinX(bounds),
                                  MAX(CGRectGetMinY(bounds), MIN(CGRectGetMaxY(bounds), self.center.y)));
     self.positionYFraction = CGRectGetHeight(bounds) > 0.0
@@ -443,6 +446,39 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @end
 
 @implementation RTLCOverlayViewController
+
+- (BOOL)shouldAutorotate {
+    return YES;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
+    // Follow every orientation allowed by the guest app. UIKit rotates the
+    // root view and its arrow together, without an extra icon transform.
+    return UIInterfaceOrientationMaskAll;
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size
+      withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    // Finish an active drag in the old coordinate system before it changes.
+    if (self.button.dragging) {
+        [self.button snapToNearestEdgeAnimated:NO];
+    }
+    if (self.button.tracking) {
+        [self.button cancelTrackingWithEvent:nil];
+        self.button.transform = CGAffineTransformIdentity;
+    }
+
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        [self.view layoutIfNeeded];
+        [self.button restorePosition];
+    } completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        // Reapply once the final safe-area insets are available. Never resave
+        // during rotation: the same side and fraction apply in both directions.
+        [self.view layoutIfNeeded];
+        [self.button restorePosition];
+    }];
+}
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
