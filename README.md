@@ -8,6 +8,7 @@ This repository was made entirely by Codex (AI).
 ## Features
 
 - Draggable circular Return control that snaps to the nearest screen edge.
+- Starts in the top-left safe-area corner and remembers its dragged position separately for each container across launches.
 - Liquid Glass effect on iOS 26 when the system API is available, with a system-material fallback on earlier versions.
 - High-contrast white return icon, border, and shadow for readability over bright content.
 - Fades to 20% opacity after three seconds of inactivity; touching it restores full opacity.

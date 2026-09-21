@@ -2,6 +2,7 @@
 #import <objc/message.h>
 #import <QuartzCore/QuartzCore.h>
 #import <dlfcn.h>
+#import <math.h>
 
 #pragma mark - LiveContainer bridge
 
@@ -40,7 +41,11 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, assign) BOOL ignoreNextTap;
 @property(nonatomic, strong) NSTimer *fadeTimer;
 @property(nonatomic, strong) UIImageView *iconView;
+@property(nonatomic, copy) NSString *positionPath;
+@property(nonatomic, assign) BOOL positionOnRight;
+@property(nonatomic, assign) CGFloat positionYFraction;
 - (void)setAlpha:(CGFloat)alpha animated:(BOOL)animated;
+- (void)restorePosition;
 @end
 
 @interface RTLCOverlayWindow : UIWindow
@@ -72,6 +77,20 @@ static CGFloat const RTLCDragThreshold = 8.0;
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
+
+    // LiveContainer gives each guest data container its own home directory.
+    // A dedicated file also avoids sharing app preference domains between containers.
+    self.positionPath = [NSHomeDirectory() stringByAppendingPathComponent:
+                         @"Library/Preferences/ReturnToLiveContainer.position.plist"];
+    NSDictionary *position = [NSDictionary dictionaryWithContentsOfFile:self.positionPath];
+    NSNumber *right = position[@"right"];
+    NSNumber *fraction = position[@"yFraction"];
+    if ([right isKindOfClass:NSNumber.class] &&
+        [fraction isKindOfClass:NSNumber.class] && isfinite(fraction.doubleValue)) {
+        self.positionOnRight = right.boolValue;
+        self.positionYFraction = MAX(0.0, MIN(1.0, fraction.doubleValue));
+    }
+    // Zero-initialized position properties place new containers at the top left.
 
     self.backgroundColor = UIColor.clearColor;
     self.accessibilityLabel = @"Return to LiveContainer";
@@ -257,28 +276,48 @@ static CGFloat const RTLCDragThreshold = 8.0;
     [self resetFadeTimer];
 }
 
+- (CGRect)positionBounds {
+    UIWindow *window = self.overlayWindow;
+    CGRect bounds = window.bounds;
+    UIEdgeInsets safe = window.safeAreaInsets;
+    CGFloat half = self.bounds.size.width / 2.0;
+    CGFloat leftX = safe.left + half + RTLCMargin;
+    CGFloat rightX = MAX(leftX, CGRectGetWidth(bounds) - safe.right - half - RTLCMargin);
+    CGFloat topY = safe.top + half + RTLCMargin;
+    CGFloat bottomY = MAX(topY, CGRectGetHeight(bounds) - safe.bottom - half - RTLCMargin);
+    return CGRectMake(leftX, topY, rightX - leftX, bottomY - topY);
+}
+
+- (void)restorePosition {
+    if (!self.overlayWindow || self.dragging) return;
+    CGRect bounds = [self positionBounds];
+    self.center = CGPointMake(self.positionOnRight ? CGRectGetMaxX(bounds) : CGRectGetMinX(bounds),
+                              CGRectGetMinY(bounds) + self.positionYFraction * CGRectGetHeight(bounds));
+}
+
 - (void)snapToNearestEdgeAnimated:(BOOL)animated {
     UIWindow *window = self.overlayWindow;
     if (!window) return;
 
-    CGRect bounds = window.bounds;
-    UIEdgeInsets safe = window.safeAreaInsets;
+    CGRect bounds = [self positionBounds];
+    self.positionOnRight = self.center.x >= CGRectGetMidX(window.bounds);
+    CGPoint target = CGPointMake(self.positionOnRight ? CGRectGetMaxX(bounds) : CGRectGetMinX(bounds),
+                                 MAX(CGRectGetMinY(bounds), MIN(CGRectGetMaxY(bounds), self.center.y)));
+    self.positionYFraction = CGRectGetHeight(bounds) > 0.0
+        ? (target.y - CGRectGetMinY(bounds)) / CGRectGetHeight(bounds) : 0.0;
+    self.dragging = NO;
 
-    CGFloat half = self.bounds.size.width / 2.0;
-    CGFloat leftX = safe.left + half + RTLCMargin;
-    CGFloat rightX = CGRectGetWidth(bounds) - safe.right - half - RTLCMargin;
-    CGFloat topY = safe.top + half + RTLCMargin;
-    CGFloat bottomY = CGRectGetHeight(bounds) - safe.bottom - half - RTLCMargin;
-
-    CGPoint target = self.center;
-
-    if (target.x < CGRectGetMidX(bounds)) {
-        target.x = leftX;
-    } else {
-        target.x = rightX;
+    // Write the destination immediately so returning to the host during the
+    // animation cannot lose it. Store relative height to support rotation.
+    NSDictionary *position = @{@"right": @(self.positionOnRight),
+                               @"yFraction": @(self.positionYFraction)};
+    NSError *error = nil;
+    BOOL directoryReady = [NSFileManager.defaultManager
+        createDirectoryAtPath:self.positionPath.stringByDeletingLastPathComponent
+        withIntermediateDirectories:YES attributes:nil error:&error];
+    if (!directoryReady || ![position writeToFile:self.positionPath atomically:YES]) {
+        NSLog(@"[ReturnToLiveContainer] Could not save arrow position: %@", error ?: @"File write failed");
     }
-
-    target.y = MAX(topY, MIN(bottomY, target.y));
 
     void (^animations)(void) = ^{
         self.center = target;
@@ -405,6 +444,16 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
 @implementation RTLCOverlayViewController
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    [self.button restorePosition];
+}
+
+- (void)viewSafeAreaInsetsDidChange {
+    [super viewSafeAreaInsetsDidChange];
+    [self.button restorePosition];
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
 
@@ -469,10 +518,9 @@ static void rtlcInstallOverlay(void) {
 
         controller.button.overlayWindow = rtlOverlayWindow;
         rtlOverlayWindow.returnButton = controller.button;
-        controller.button.center = CGPointMake(CGRectGetWidth(rtlOverlayWindow.bounds) - RTLCDiameter / 2.0 - RTLCMargin,
-                                               CGRectGetMidY(rtlOverlayWindow.bounds));
-        [controller.button snapToNearestEdgeAnimated:NO];
         rtlOverlayWindow.hidden = NO;
+        [controller.view layoutIfNeeded];
+        [controller.button restorePosition];
     });
 }
 
