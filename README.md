@@ -2,26 +2,22 @@
 
 A [LiveContainer](https://github.com/LiveContainer/LiveContainer) TweakLoader tweak that places a draggable Return button over guest apps.
 
-## Note:
-This repository was made entirely by Codex (AI).
+### Note: This repository was made entirely by Codex (AI).
 
 ## Features
 
-- Draggable circular Return control that snaps to the nearest screen edge.
-- Asks for confirmation before returning, with Cancel and Return options.
-- Starts in the top-left safe-area corner and remembers its dragged position separately for each container across launches.
-- Keeps the same side and proportional height when switching between portrait and landscape (for example, 3/4 down the left edge), with the arrow rotating with the interface.
-- Liquid Glass effect on iOS 26 when the system API is available, with a system-material fallback on earlier versions.
+- Draggable circular Return control that snaps to the nearest screen edge similar to how the miniplayer works.
 - High-contrast white return icon, border, and shadow for readability over bright content.
-- Fades to 20% opacity after three seconds of inactivity; touching it restores full opacity.
-- Uses LiveContainer's built-in return/relaunch bridge, with URL-based fallbacks for older builds.
+- Remembers its dragged position separately for each container across launches.
+- Liquid Glass effect on iOS 26 when the system API is available, with a system-material fallback on earlier versions.
+- Fades to 20% opacity after three seconds of inactivity, and touching it restores full opacity.
+- Uses LiveContainer's built-in return/relaunch bridge. No additional apps or download required.
 
 ## Downloading a build
 
-### Built version (.dylib only)
+### Built version
 You can download the latest version [here](https://github.com/WizardEels/ReturnToLiveContainer/releases/latest)
-Download the [nightly build](https://github.com/WizardEels/ReturnToLiveContainer/releases/tag/nightly). Its only uploaded asset is `ReturnToLiveContainer.dylib`.
-
+You can also download the nightly build [here](https://github.com/WizardEels/ReturnToLiveContainer/releases/tag/nightly). Be aware that it may have some bugs
 
 ### Actions
 You can also run a build manually to download the `.dylib`:
@@ -36,7 +32,7 @@ You can also run a build manually to download the `.dylib`:
 1. Download the `ReturnToLiveContainer.dylib` file.
 2. Open the primary LiveContainer app and go to **Tweaks**.
 3. Import `ReturnToLiveContainer.dylib` into either the global Tweaks folder or an app-specific tweak folder.
-4. Assign the folder to a guest app when using an app-specific folder.
+4. Assign the folder to a guest app if you're using an app-specific folder.
 5. Use LiveContainer's **Sign** action if the tweak manager does not automatically sign the imported dylib, then launch the guest app.
 
 LiveContainer loads global tweaks into every guest app and supports app-specific tweak folders. Do not enable both **Don't Inject TweakLoader** and **Don't Load TweakLoader** for the guest app, since that disables tweak loading.
