@@ -8,6 +8,7 @@ This repository was made entirely by Codex (AI).
 ## Features
 
 - Draggable circular Return control that snaps to the nearest screen edge.
+- Asks for confirmation before returning, with Cancel and Return options.
 - Starts in the top-left safe-area corner and remembers its dragged position separately for each container across launches.
 - Keeps the same side and proportional height when switching between portrait and landscape (for example, 3/4 down the left edge), with the arrow rotating with the interface.
 - Liquid Glass effect on iOS 26 when the system API is available, with a system-material fallback on earlier versions.
@@ -19,6 +20,8 @@ This repository was made entirely by Codex (AI).
 
 ### Built version (.dylib only)
 You can download the latest version [here](https://github.com/WizardEels/ReturnToLiveContainer/releases/latest)
+Download the [nightly build](https://github.com/WizardEels/ReturnToLiveContainer/releases/tag/nightly). Its only uploaded asset is `ReturnToLiveContainer.dylib`.
+
 
 ### Actions
 You can also run a build manually to download either the .dylib or the .deb:
@@ -27,8 +30,8 @@ You can also run a build manually to download either the .dylib or the .deb:
 2. Select **Build tweak**.
 3. Choose **Run workflow**.
 4. When the workflow finishes, open that run and download one of its artifacts:
-   - `ReturnToLiveContainer-dylib` — recommended for LiveContainer. It contains `ReturnToLiveContainer.dylib`.
-   - `ReturnToLiveContainer` — the Debian (`.deb`) package for conventional Theos/jailbreak package installation.
+   - `ReturnToLiveContainer.dylib` — recommended for LiveContainer. It contains `ReturnToLiveContainer.dylib`.
+   - `ReturnToLiveContainer.deb` — the Debian (`.deb`) package for conventional Theos/jailbreak package installation.
 
 ## Installing in LiveContainer
 

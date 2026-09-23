@@ -41,6 +41,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 @property(nonatomic, assign) BOOL ignoreNextTap;
 @property(nonatomic, strong) NSTimer *fadeTimer;
 @property(nonatomic, strong) UIImageView *iconView;
+@property(nonatomic, weak) UIAlertController *returnConfirmation;
 @property(nonatomic, copy) NSString *positionPath;
 @property(nonatomic, assign) BOOL positionOnRight;
 @property(nonatomic, assign) CGFloat positionYFraction;
@@ -96,7 +97,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
 
     self.backgroundColor = UIColor.clearColor;
     self.accessibilityLabel = @"Return to LiveContainer";
-    self.accessibilityHint = @"Returns to the main LiveContainer app.";
+    self.accessibilityHint = @"Asks for confirmation before returning to the main LiveContainer app.";
 
     Class glassEffectClass = NSClassFromString(@"UIGlassEffect");
     SEL glassFactory = NSSelectorFromString(@"effectWithStyle:");
@@ -215,7 +216,7 @@ static CGFloat const RTLCDragThreshold = 8.0;
         return;
     }
 
-    [self returnToLiveContainer];
+    [self confirmReturnToLiveContainer];
 }
 
 - (void)buttonTouchCancelled:(UIButton *)sender {
@@ -363,6 +364,49 @@ static CGFloat const RTLCDragThreshold = 8.0;
 }
 
 #pragma mark - Return action
+
+- (void)confirmReturnToLiveContainer {
+    if (self.returnConfirmation) return;
+
+    // Present in the guest window: the overlay only accepts button touches
+    // and cannot become key, so an alert in that window would not work.
+    UIWindow *guestWindow = nil;
+    for (UIWindow *candidate in self.overlayWindow.windowScene.windows) {
+        if (candidate == self.overlayWindow || candidate.hidden || candidate.alpha == 0.0 ||
+            !candidate.rootViewController) continue;
+        if (candidate.isKeyWindow) {
+            guestWindow = candidate;
+            break;
+        }
+        if (!guestWindow && candidate.windowLevel == UIWindowLevelNormal) {
+            guestWindow = candidate;
+        }
+    }
+    UIViewController *presenter = guestWindow.rootViewController;
+    while (presenter.presentedViewController) {
+        presenter = presenter.presentedViewController;
+    }
+    if (!presenter.viewIfLoaded.window || presenter.isBeingDismissed || presenter.isBeingPresented) {
+        [self resetFadeTimer];
+        return;
+    }
+
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Return to LiveContainer?"
+        message:@"Are you sure you would like to return to LiveContainer?"
+        preferredStyle:UIAlertControllerStyleAlert];
+    __weak RTLCButton *weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel
+        handler:^(UIAlertAction *action) {
+            [weakSelf resetFadeTimer];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Return" style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *action) {
+            [weakSelf returnToLiveContainer];
+        }]];
+    self.returnConfirmation = alert;
+    [presenter presentViewController:alert animated:YES completion:nil];
+}
 
 - (void)returnToLiveContainer {
     [self.fadeTimer invalidate];
