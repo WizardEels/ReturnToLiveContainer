@@ -59,11 +59,14 @@ The finished dylib for LiveContainer import is at `.theos/_/Library/MobileSubstr
 Edit these values near the top of [`Tweak.xm`](Tweak.xm):
 
 ```objc
-static CGFloat const RTLCDiameter = 58.0;
-static CGFloat const RTLCMargin = 10.0;
-static NSTimeInterval const RTLCFadeDelay = 3.0;
-static CGFloat const RTLCIdleAlpha = 0.20;
+static CGFloat const RTLCDiameter = 58.0; // Button diameter in points.
+static BOOL const RTLCConfirmReturn = YES; // Set to NO to return immediately on tap.
+static CGFloat const RTLCMargin = 10.0; // Gap between the button and safe-area edges in points.
+static NSTimeInterval const RTLCFadeDelay = 3.0; // Seconds of inactivity before the button fades.
+static CGFloat const RTLCIdleAlpha = 0.20; // Idle opacity from 0.0 (invisible) to 1.0 (fully opaque).
 ```
+
+Set `RTLCConfirmReturn` to `NO` to skip the confirmation and return immediately on tap. The default, `YES`, shows the confirmation prompt.
 
 Rebuild and re-import/re-sign the dylib after making a change.
 
