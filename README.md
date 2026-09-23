@@ -24,14 +24,12 @@ Download the [nightly build](https://github.com/WizardEels/ReturnToLiveContainer
 
 
 ### Actions
-You can also run a build manually to download either the .dylib or the .deb:
+You can also run a build manually to download the `.dylib`:
 
 1. Open the repository's **Actions** tab.
 2. Select **Build tweak**.
 3. Choose **Run workflow**.
-4. When the workflow finishes, open that run and download one of its artifacts:
-   - `ReturnToLiveContainer.dylib` — recommended for LiveContainer. It contains `ReturnToLiveContainer.dylib`.
-   - `ReturnToLiveContainer.deb` — the Debian (`.deb`) package for conventional Theos/jailbreak package installation.
+4. When the workflow finishes, open that run and download the `ReturnToLiveContainer.dylib` artifact. Extract it to get `ReturnToLiveContainer.dylib`.
 
 ## Installing in LiveContainer
 
@@ -58,10 +56,7 @@ export THEOS="$HOME/theos" # Replace with your actual Theos directory.
 make package FINALPACKAGE=1
 ```
 
-The finished outputs are:
-
-- `packages/*.deb` — installable Debian package.
-- `.theos/_/Library/MobileSubstrate/DynamicLibraries/ReturnToLiveContainer.dylib` — dylib for LiveContainer import.
+The finished dylib for LiveContainer import is at `.theos/_/Library/MobileSubstrate/DynamicLibraries/ReturnToLiveContainer.dylib`.
 
 ## Customisation
 
