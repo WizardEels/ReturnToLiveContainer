@@ -24,8 +24,8 @@ static BOOL const RTLCConfirmReturn = YES; // Set to NO to return immediately on
 static CGFloat const RTLCMargin = 10.0; // Gap between the button and safe-area edges in points.
 static NSTimeInterval const RTLCFadeDelay = 3.0; // Seconds of inactivity before the button fades.
 static CGFloat const RTLCIdleAlpha = 0.20; // Idle opacity from 0.0 (invisible) to 1.0 (fully opaque).
-static CGFloat const RTLCActiveAlpha = 1.0;
-static CGFloat const RTLCDragThreshold = 8.0;
+static CGFloat const RTLCActiveAlpha = 1.0; // Active opacity from 0.0 (invisible) to 1.0 (fully opaque).
+static CGFloat const RTLCDragThreshold = 8.0; // Distance in points before a tap becomes a drag.
 
 #pragma mark - Overlay window
 
