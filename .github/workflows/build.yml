@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           test -s release/ReturnToLiveContainer.dylib
           notes="Automated build from commit ${GITHUB_SHA}. Download ReturnToLiveContainer.dylib and import it into LiveContainer."
-          if gh release view nightly >/dev/null 2>&1; then
+          if gh release view nightly. Please note that the nightly is unstable, and the release is almost always updated. >/dev/null 2>&1; then
             gh api --method PATCH "repos/${GH_REPO}/git/refs/tags/nightly" \
               -f sha="$GITHUB_SHA" -F force=true
             gh release edit nightly --title "Nightly" --notes "$notes" --prerelease
