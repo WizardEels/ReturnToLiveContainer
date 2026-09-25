@@ -31,6 +31,109 @@ static CGFloat const RTLCDragThreshold = 8.0; // Distance in points before a tap
 
 @class RTLCOverlayWindow;
 
+#pragma mark - Confirmation
+
+@interface RTLCConfirmationView : UIView
+@property(nonatomic, copy) void (^completion)(BOOL confirmed);
+@end
+
+@implementation RTLCConfirmationView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.18];
+    self.accessibilityViewIsModal = YES;
+
+    UIVisualEffect *effect = nil;
+    Class glassClass = NSClassFromString(@"UIGlassEffect");
+    SEL factory = NSSelectorFromString(@"effectWithStyle:");
+    if (!UIAccessibilityIsReduceTransparencyEnabled() && [glassClass respondsToSelector:factory]) {
+        effect = ((id (*)(id, SEL, NSInteger))objc_msgSend)(glassClass, factory, 0);
+    }
+    if (!effect) effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterial];
+    UIVisualEffectView *card = [[UIVisualEffectView alloc] initWithEffect:effect];
+    card.translatesAutoresizingMaskIntoConstraints = NO;
+    card.layer.cornerRadius = 28.0;
+    card.clipsToBounds = YES;
+    [self addSubview:card];
+
+    // Scroll the contents when larger accessibility text exceeds landscape height.
+    UIScrollView *scroll = [UIScrollView new];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [card.contentView addSubview:scroll];
+    UILabel *title = [UILabel new];
+    title.text = @"Return to LiveContainer?";
+    title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    title.accessibilityTraits |= UIAccessibilityTraitHeader;
+    UILabel *message = [UILabel new];
+    message.text = @"Are you sure you would like to return to LiveContainer?";
+    message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    for (UILabel *label in @[title, message]) {
+        label.numberOfLines = 0;
+        label.textAlignment = NSTextAlignmentCenter;
+        label.textColor = UIColor.labelColor;
+        label.adjustsFontForContentSizeCategory = YES;
+        [label setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                              forAxis:UILayoutConstraintAxisVertical];
+    }
+    UIButton *cancel = [UIButton buttonWithType:UIButtonTypeSystem];
+    [cancel setTitle:@"Cancel" forState:UIControlStateNormal];
+    [cancel addTarget:self action:@selector(cancelReturn) forControlEvents:UIControlEventTouchUpInside];
+    UIButton *confirm = [UIButton buttonWithType:UIButtonTypeSystem];
+    [confirm setTitle:@"Return" forState:UIControlStateNormal];
+    [confirm addTarget:self action:@selector(confirmReturn) forControlEvents:UIControlEventTouchUpInside];
+    for (UIButton *button in @[cancel, confirm]) {
+        button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+        button.titleLabel.adjustsFontForContentSizeCategory = YES;
+        [button setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                               forAxis:UILayoutConstraintAxisVertical];
+        [button.heightAnchor constraintGreaterThanOrEqualToConstant:44.0].active = YES;
+    }
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[title, message, cancel, confirm]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 12.0;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [scroll addSubview:stack];
+    NSLayoutConstraint *width = [card.widthAnchor constraintEqualToConstant:340.0];
+    width.priority = UILayoutPriorityDefaultHigh;
+    NSLayoutConstraint *height = [card.heightAnchor constraintEqualToAnchor:stack.heightAnchor constant:40.0];
+    height.priority = UILayoutPriorityDefaultHigh;
+    [NSLayoutConstraint activateConstraints:@[
+        width, height,
+        [card.widthAnchor constraintLessThanOrEqualToAnchor:self.widthAnchor constant:-32.0],
+        [card.heightAnchor constraintLessThanOrEqualToAnchor:self.heightAnchor constant:-32.0],
+        [card.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+        [card.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:20.0],
+        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-20.0],
+        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:20.0],
+        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-20.0],
+        [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-40.0]
+    ]];
+    return self;
+}
+
+- (void)cancelReturn {
+    if (self.completion) self.completion(NO);
+}
+
+- (void)confirmReturn {
+    if (self.completion) self.completion(YES);
+}
+
+- (BOOL)accessibilityPerformEscape {
+    [self cancelReturn];
+    return YES;
+}
+
+@end
+
 #pragma mark - Button
 
 @interface RTLCButton : UIButton
@@ -42,7 +145,7 @@ static CGFloat const RTLCDragThreshold = 8.0; // Distance in points before a tap
 @property(nonatomic, assign) BOOL ignoreNextTap;
 @property(nonatomic, strong) NSTimer *fadeTimer;
 @property(nonatomic, strong) UIImageView *iconView;
-@property(nonatomic, weak) UIAlertController *returnConfirmation;
+@property(nonatomic, strong) RTLCConfirmationView *returnConfirmation;
 @property(nonatomic, copy) NSString *positionPath;
 @property(nonatomic, assign) BOOL positionOnRight;
 @property(nonatomic, assign) CGFloat positionYFraction;
@@ -65,6 +168,8 @@ static CGFloat const RTLCDragThreshold = 8.0; // Distance in points before a tap
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    // Block guest touches while the confirmation is visible, including outside the card.
+    if (self.returnButton.returnConfirmation) return [super pointInside:point withEvent:event];
     RTLCButton *button = self.returnButton;
     if (!button || button.hidden || button.alpha < 0.01) {
         return NO;
@@ -374,45 +479,26 @@ static CGFloat const RTLCDragThreshold = 8.0; // Distance in points before a tap
 
 - (void)confirmReturnToLiveContainer {
     if (self.returnConfirmation) return;
+    UIView *container = self.superview;
+    if (!container.window) return;
 
-    // Present in the guest window: the overlay only accepts button touches
-    // and cannot become key, so an alert in that window would not work.
-    UIWindow *guestWindow = nil;
-    for (UIWindow *candidate in self.overlayWindow.windowScene.windows) {
-        if (candidate == self.overlayWindow || candidate.hidden || candidate.alpha == 0.0 ||
-            !candidate.rootViewController) continue;
-        if (candidate.isKeyWindow) {
-            guestWindow = candidate;
-            break;
-        }
-        if (!guestWindow && candidate.windowLevel == UIWindowLevelNormal) {
-            guestWindow = candidate;
-        }
-    }
-    UIViewController *presenter = guestWindow.rootViewController;
-    while (presenter.presentedViewController) {
-        presenter = presenter.presentedViewController;
-    }
-    if (!presenter.viewIfLoaded.window || presenter.isBeingDismissed || presenter.isBeingPresented) {
-        [self resetFadeTimer];
-        return;
-    }
-
-    UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"Return to LiveContainer?"
-        message:@"Are you sure you would like to return to LiveContainer?"
-        preferredStyle:UIAlertControllerStyleAlert];
+    // Own the material instead of inheriting a fullscreen player's alert style.
+    // Sharing the placement view keeps the prompt aligned with guest rotation.
+    RTLCConfirmationView *confirmation = [[RTLCConfirmationView alloc] initWithFrame:container.bounds];
     __weak RTLCButton *weakSelf = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel
-        handler:^(UIAlertAction *action) {
-            [weakSelf resetFadeTimer];
-        }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Return" style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *action) {
-            [weakSelf returnToLiveContainer];
-        }]];
-    self.returnConfirmation = alert;
-    [presenter presentViewController:alert animated:YES completion:nil];
+    confirmation.completion = ^(BOOL confirmed) {
+        RTLCButton *button = weakSelf;
+        [button.returnConfirmation removeFromSuperview];
+        button.returnConfirmation = nil;
+        button.accessibilityElementsHidden = NO;
+        UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, button);
+        if (confirmed) [button returnToLiveContainer];
+        else [button resetFadeTimer];
+    };
+    self.returnConfirmation = confirmation;
+    self.accessibilityElementsHidden = YES;
+    [container addSubview:confirmation];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, confirmation);
 }
 
 - (void)returnToLiveContainer {
